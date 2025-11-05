@@ -226,88 +226,72 @@ export function ChatWindow({
     : 'Unknown Chat';
 
   return (
-    <div className="w-full h-full text-gray-100 bg-gray-900 flex flex-col">
-      <div className="px-6 py-4 bg-gray-800/50 flex items-center gap-4 shrink-0 border-b border-gray-700/30">
+    <div className="w-full h-full text-black bg-white flex flex-col">
+      <div className="px-6 py-4 bg-vibrant-blue flex items-center gap-4 shrink-0 border-b-4 border-black">
         {isMobile && (
           <button
               onClick={handleBackToChatList}
-              className="p-2 rounded-full flex justify-center items-center cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors opacity-50"
+              className="p-3 rounded-full flex justify-center items-center cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black"
             >
-              <FaChevronLeft className="w-4 h-4 text-gray-400" />
+              <FaChevronLeft className="w-5 h-5 text-black" />
             </button>
         )}
-        <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center border border-gray-600">
-          <span className="text-sm font-medium text-indigo-400">{contactName.slice(0, 1).toUpperCase()}</span>
+        <div className="h-12 w-12 rounded-full bg-vibrant-purple flex items-center justify-center border-4 border-black">
+          <span className="text-lg font-black text-black">{contactName.slice(0, 1).toUpperCase()}</span>
         </div>
         <div className="flex-1">
-          <div className="font-semibold text-gray-100">{contactName}</div>
-          <div className="text-xs text-gray-400">
+          <div className="font-black text-black text-lg">{contactName}</div>
+          <div className="text-sm text-black/70 font-bold">
             {currentChannel ? `${currentChannel.messages_count} messages` : 'Loading...'}
           </div>
         </div>
         <div className="flex gap-2">
           {/*
-          <button className="p-2 rounded-full cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors">
-            <FaPhone className="w-4 h-4 text-gray-400" />
+          <button className="p-2 rounded-full cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black">
+            <FaPhone className="w-4 h-4 text-black" />
           </button>
-          <button className="p-2 rounded-full cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors">
-            <FaVideo className="w-4 h-4 text-gray-400" />
+          <button className="p-2 rounded-full cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black">
+            <FaVideo className="w-4 h-4 text-black" />
           </button>
           */}
-          <button className="p-2 rounded-full cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors">
-            <DotsVerticalIcon className="w-4 h-4 text-gray-400" />
+          <button className="p-3 rounded-full cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black">
+            <DotsVerticalIcon className="w-5 h-5 text-black" />
           </button>
         </div>
       </div>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 bg-gray-900"
-        style={{
-          backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
-              <defs>
-                <pattern id="chat-pattern" width="60" height="60" patternUnits="userSpaceOnUse">
-                  <circle cx="15" cy="15" r="1" fill="rgba(99,102,241,0.06)"/>
-                  <circle cx="45" cy="15" r="1" fill="rgba(99,102,241,0.06)"/>
-                  <circle cx="15" cy="45" r="1" fill="rgba(99,102,241,0.06)"/>
-                  <circle cx="45" cy="45" r="1" fill="rgba(99,102,241,0.06)"/>
-                  <circle cx="30" cy="30" r="0.5" fill="rgba(99,102,241,0.04)"/>
-                </pattern>
-              </defs>
-              <rect width="60" height="60" fill="url(#chat-pattern)"/>
-            </svg>
-          `)}")`,
-          backgroundSize: "60px 60px"
-        }}
+        className="flex-1 overflow-y-auto p-6 bg-vibrant-mint/30"
         >
         {hasMoreMessages && (
           <div className="text-center mb-4">
             <button
               onClick={handleLoadMore}
               disabled={isFetchingMessages}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-vibrant-purple hover:bg-vibrant-pink text-black text-sm font-black rounded-full disabled:opacity-50 disabled:cursor-not-allowed border-4 border-black"
             >
-              {isFetchingMessages ? 'Loading...' : 'Load older messages'}
+              {isFetchingMessages ? 'LOADING...' : 'LOAD MORE'}
             </button>
           </div>
         )}
 
         <div className="mx-auto max-w-4xl space-y-4">
           {resolvedMessages.length === 0 && !isFetchingMessages ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-lg text-gray-400">💬</span>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-vibrant-yellow rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-black">
+                <span className="text-3xl">💬</span>
               </div>
-              <p className="text-gray-400 text-sm">No messages yet. Start the conversation!</p>
+              <p className="text-black text-lg font-black italic">NO MESSAGES YET</p>
+              <p className="text-black/70 text-sm font-bold mt-2">Start the conversation!</p>
             </div>
           ) : (
             resolvedMessages.map((m) => (
               <div key={m.id} className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`${m.fromMe 
-                    ? "bg-indigo-500 text-white" 
-                    : "bg-gray-700 text-gray-100"
-                  } rounded-2xl px-4 py-3 max-w-[70%] text-sm shadow-sm`}
+                    ? "bg-vibrant-purple text-black border-4 border-black" 
+                    : "bg-white text-black border-4 border-black"
+                  } rounded-[2rem] px-5 py-3 max-w-[70%] text-sm shadow-lg`}
                 >
 
                   {/**{m.attachments && m.attachments.length > 0 && (
@@ -357,13 +341,13 @@ export function ChatWindow({
                   )}*/}
                   
                   {m.text && (
-                    <div className="font-medium">{m.text}</div>
+                    <div className="font-bold">{m.text}</div>
                   )}
                   
-                  <div className={`text-xs mt-1 ${m.fromMe ? "text-indigo-100" : "text-gray-400"}`}>{m.time}</div>
+                  <div className={`text-xs mt-1 font-bold ${m.fromMe ? "text-black/70" : "text-black/60"}`}>{m.time}</div>
                   {m.fromMe && (
                     <div className="flex justify-end mt-1">
-                      <span className="text-xs text-indigo-200">✓✓</span>
+                      <span className="text-xs text-black/70 font-black">✓✓</span>
                     </div>
                   )}
                 </div>
@@ -375,30 +359,30 @@ export function ChatWindow({
         <div ref={messagesEndRef} />
 
         {isFetchingMessages && resolvedMessages.length === 0 && (
-          <div className="text-center py-8">
-            <div className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-400 text-sm">Loading messages...</p>
+          <div className="text-center py-12">
+            <div className="w-12 h-12 border-4 border-vibrant-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-black text-base font-black italic">LOADING...</p>
           </div>
         )}
       </div>
       
       {selectedFiles.length > 0 && (
-        <div className="px-4 py-2 bg-gray-800/30 border-t border-gray-700/30">
+        <div className="px-4 py-3 bg-vibrant-yellow border-t-4 border-black">
           <div className="flex flex-wrap gap-2">
             {selectedFiles.map((file, index) => (
-              <div key={index} className="flex items-center gap-2 bg-gray-700 rounded-lg p-2 text-sm">
+              <div key={index} className="flex items-center gap-2 bg-white rounded-full p-3 text-sm border-4 border-black">
                 {file.type.startsWith('image/') ? (
-                  <FaImage className="text-indigo-400" />
+                  <FaImage className="text-vibrant-purple" />
                 ) : (
-                  <FaFile className="text-gray-400" />
+                  <FaFile className="text-black" />
                 )}
-                <span className="text-gray-200 truncate max-w-32">{file.name}</span>
-                <span className="text-gray-500 text-xs">({formatFileSize(file.size)})</span>
+                <span className="text-black truncate max-w-32 font-bold">{file.name}</span>
+                <span className="text-black/70 text-xs font-bold">({formatFileSize(file.size)})</span>
                 <button
                   onClick={() => removeFile(index)}
-                  className="bg-gray-800 text-gray-400 hover:text-white transition-colors rounded-full py-1 px-2 cursor-pointer"
+                  className="bg-vibrant-orange hover:bg-vibrant-pink text-black transition-colors rounded-full w-6 h-6 flex items-center justify-center border-2 border-black cursor-pointer font-black"
                 >
-                  <Cross2Icon className="w-3 h-3" />
+                  <Cross2Icon className="w-4 h-4" />
                 </button>
               </div>
             ))}
@@ -406,9 +390,9 @@ export function ChatWindow({
         </div>
       )}
       
-      <div className="px-4 py-4 bg-gray-800/50 flex items-center gap-3 shrink-0 border-t border-gray-700/30">
-        <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 rounded-full cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors">
-          <FaceIcon className="w-4 h-4 text-gray-400" />
+      <div className="px-4 py-4 bg-vibrant-blue flex items-center gap-3 shrink-0 border-t-4 border-black">
+        <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-3 rounded-full cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black">
+          <FaceIcon className="w-5 h-5 text-black" />
         </button>
         {showEmojiPicker && (
           <div className="absolute bottom-20 left-0 z-10">
@@ -417,17 +401,17 @@ export function ChatWindow({
                 setMessageText(prev => prev + emojiObject.emoji);
                 setShowEmojiPicker(false);
               }}
-              theme={Theme.DARK}
+              theme={Theme.LIGHT}
               skinTonesDisabled
               width={window.innerWidth}
             />
           </div>
         )}
         <button 
-          className="p-2 rounded-full cursor-pointer bg-gray-800/50 hover:bg-indigo-500/20 transition-colors"
+          className="p-3 rounded-full cursor-pointer bg-white hover:bg-vibrant-yellow transition-colors border-4 border-black"
           onClick={() => fileInputRef.current?.click()}
         >
-          <FaPaperclip className="w-4 h-4 text-gray-400" />
+          <FaPaperclip className="w-5 h-5 text-black" />
         </button>
         <input
           ref={fileInputRef}
@@ -446,21 +430,21 @@ export function ChatWindow({
             onChange={(e) => setMessageText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isSendingMessage || !isReady}
-            className="flex-1 rounded-full titillium-web-bold bg-gray-700 text-gray-100 placeholder-gray-400 px-4 py-3 outline-none border border-gray-600 focus:border-indigo-500/50 focus:bg-gray-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 rounded-full titillium-web-bold bg-white text-black placeholder-black/60 px-5 py-3 outline-none border-4 border-black focus:bg-vibrant-mint transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <button 
             type="submit"
             disabled={(!messageText.trim() && selectedFiles.length === 0) || isSendingMessage || !isReady}
-            className="p-3 cursor-pointer rounded-full bg-indigo-500 hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-4 cursor-pointer rounded-full bg-vibrant-purple hover:bg-vibrant-pink transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-4 border-black"
           >
-            <PaperPlaneIcon className="w-4 h-4 text-white" />
+            <PaperPlaneIcon className="w-5 h-5 text-black" />
           </button>
         </form>
       </div>
 
       {channelError && (
-        <div className="px-4 py-2 bg-red-900/20 border-t border-red-500/30">
-          <p className="text-red-400 text-sm">Error: {channelError}</p>
+        <div className="px-4 py-3 bg-vibrant-yellow border-t-4 border-black">
+          <p className="text-black text-sm font-bold">Error: {channelError}</p>
         </div>
       )}
     </div>
