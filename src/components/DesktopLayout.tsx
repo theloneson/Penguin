@@ -39,14 +39,18 @@ export function DesktopLayout() {
               handleBackToChatList={handleBackToChatList}
             />
           ) : (
-            <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ChatBubbleIcon className="w-8 h-8 text-indigo-400" />
+            <div className="w-full h-full bg-white flex items-center justify-center px-6">
+              <div className="max-w-md w-full text-center px-10 py-12 bg-white rounded-[2rem] border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)]">
+                <div className="w-20 h-20 bg-vibrant-purple rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-black">
+                  <ChatBubbleIcon className="w-10 h-10 text-black" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-200 mb-2">Welcome to Penguin</h2>
-                <p className="text-gray-400">
-                  {!isReady ? 'Initializing messaging...' : 'Select a conversation to start chatting'}
+                <h2 className="text-2xl font-black text-black mb-3 titillium-web-bold">
+                  {isReady ? 'Pick a conversation' : 'Warming up the igloo'}
+                </h2>
+                <p className="text-black/70 font-bold">
+                  {!isReady
+                    ? 'Initializing secure messaging. Hang tight while we gather your channels.'
+                    : 'Select a chat from the list or start a new one to begin messaging.'}
                 </p>
               </div>
             </div>
