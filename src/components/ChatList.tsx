@@ -232,10 +232,16 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
         ? `Group ${channelId.slice(0, 5)}...${channelId.slice(-5)}`
         : `${channelId.slice(0, 5)}...${channelId.slice(-5)}`;
       
+      const hasAttachment =
+        channel.last_message?.attachments &&
+        channel.last_message.attachments.length > 0;
+
       return {
         id: channel.id.id,
         name: displayName,
-        lastMessage: channel.last_message?.text || 'No messages yet',
+        lastMessage: hasAttachment
+          ? '[Attachment]'
+          : channel.last_message?.text || 'No messages yet',
         time: channel.last_message 
           ? formatTimestamp(channel.last_message.createdAtMs)
           : formatTimestamp(channel.created_at_ms),

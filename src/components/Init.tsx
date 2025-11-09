@@ -50,6 +50,13 @@ export function Init() {
     setOpen(true);
   };
 
+  const handleStartChatting = () => {
+    setShowWalletFlow(true);
+    if (!currentAccount) {
+      setOpen(true);
+    }
+  };
+
   // If user is fully connected and ready, show the main app
   if (currentAccount && sessionKey && isReady) {
     return <DesktopLayout />;
@@ -98,20 +105,20 @@ export function Init() {
     // Loading when initializing session
     if (currentAccount && isInitializing) {
       return (
-        <div className="w-full h-full bg-gray-900 flex flex-col items-center justify-center titillium-web-regular">
+        <div className="w-full h-full bg-white flex flex-col items-center justify-center titillium-web-regular px-6">
           <motion.div
-            className="text-center"
+            className="max-w-md w-full text-center px-10 py-12 bg-white rounded-[2rem] border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           >
-            <div className="w-full flex justify-center">
-              <div className="w-8 h-8 flex items-center justify-center">
-                <FaSpinner className="w-6 h-6 text-penguin-primary animate-spin" />
-              </div>
+            <div className="w-20 h-20 rounded-full bg-vibrant-purple border-4 border-black flex items-center justify-center mx-auto mb-6">
+              <FaSpinner className="w-8 h-8 text-black animate-spin" />
             </div>
-            <h2 className="text-2xl font-semibold text-gray-200 mb-3 titillium-web-bold">Initializing...</h2>
-            <p className="text-gray-400 text-base mb-8 max-w-md">Setting up secure messaging session...</p>
+            <h2 className="text-2xl font-black text-black mb-3 titillium-web-bold">Initializing...</h2>
+            <p className="text-black/70 text-base font-bold mb-6">
+              Sign to set up your secure messaging session. This only takes a moment.
+            </p>
           </motion.div>
         </div>
       );
@@ -122,10 +129,15 @@ export function Init() {
   return (
     <div className="min-h-screen">
       <Navigation 
-        onConnectWallet={() => setShowWalletFlow(true)} 
+        onConnectWallet={() => {
+          setShowWalletFlow(true);
+          if (!currentAccount) {
+            setOpen(true);
+          }
+        }} 
         onOpenConnectModal={handleOpenConnectModal}
       />
-      <Hero onStartChatting={() => setShowWalletFlow(true)} />
+      <Hero onStartChatting={handleStartChatting} />
       <Features />
       <About />
       <Community />

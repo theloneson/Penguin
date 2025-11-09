@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { DotsVerticalIcon, FaceIcon, PaperPlaneIcon, Cross2Icon } from '@radix-ui/react-icons';
-import { FaPaperclip, FaChevronLeft, FaImage, FaFile } from 'react-icons/fa';
+import { FaPaperclip, FaChevronLeft, FaImage, FaFile, FaComments, FaSpinner, FaDownload } from 'react-icons/fa';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { useMessaging } from '../hooks/useMessaging';
 import { useCurrentAccount } from '@mysten/dapp-kit';
@@ -40,10 +40,55 @@ export function ChatWindow({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviewUrls, setFilePreviewUrls] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [resolvedMessages, setResolvedMessages] = useState<any[]>([]);
-  //const [attachmentErrors, setAttachmentErrors] = useState<{ [key: string]: string }>({});
-  //const [globalError, setGlobalError] = useState<string | null>(null);
+  type ResolvedAttachment = {
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    status: 'idle' | 'loading' | 'ready' | 'error';
+    url?: string;
+    error?: string;
+    fetchData?: () => Promise<Uint8Array<ArrayBuffer> | Uint8Array | ArrayBuffer | undefined>;
+    autoLoad?: boolean;
+  };
+
+  type ResolvedMessage = {
+    id: string;
+    text: string;
+    time: string;
+    fromMe: boolean;
+    attachments: ResolvedAttachment[];
+  };
+
+  type AttachmentCacheEntry = {
+    status: 'idle' | 'loading' | 'ready' | 'error';
+    url?: string;
+    error?: string;
+  };
+
+  const [resolvedMessages, setResolvedMessages] = useState<ResolvedMessage[]>([]);
+  const [attachmentErrors, setAttachmentErrors] = useState<{ [key: string]: string }>({});
+  const [globalAttachmentError, setGlobalAttachmentError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentUrlsRef = useRef<Map<string, string>>(new Map());
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const attachmentCacheRef = useRef<Record<string, AttachmentCacheEntry>>({});
+
+  const cleanupAttachmentCaches = useCallback((seenKeys: Set<string>) => {
+    for (const [key, url] of Array.from(attachmentUrlsRef.current.entries())) {
+      if (!seenKeys.has(key)) {
+        URL.revokeObjectURL(url);
+        attachmentUrlsRef.current.delete(key);
+      }
+    }
+
+    for (const key of Object.keys(attachmentCacheRef.current)) {
+      if (!seenKeys.has(key)) {
+        delete attachmentCacheRef.current[key];
+      }
+    }
+  }, []);
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   const ALLOWED_FILE_TYPES = [
@@ -133,6 +178,239 @@ export function ChatWindow({
     isLoadingOlderRef.current = false;
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      attachmentUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      attachmentUrlsRef.current.clear();
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (toastMessage) {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+      toastTimeoutRef.current = setTimeout(() => {
+        setToastMessage(null);
+        toastTimeoutRef.current = null;
+      }, 5000);
+    }
+  }, [toastMessage]);
+
+  useEffect(() => {
+    if (channelError) {
+      setToastMessage(channelError);
+    }
+  }, [channelError]);
+
+  const dismissToast = useCallback(() => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
+    setToastMessage(null);
+  }, []);
+
+  const triggerFileDownload = useCallback((url: string, filename: string) => {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.click();
+  }, []);
+
+  const fetchAttachmentData = useCallback(
+    (messageId: string, attachmentId: string, openAfterFetch = false) => {
+      const message = resolvedMessages.find((m) => m.id === messageId);
+      if (!message) {
+        return;
+      }
+      const attachment = message.attachments.find((att) => att.id === attachmentId);
+      if (!attachment) {
+        return;
+      }
+
+      if (attachment.status === 'ready' && attachment.url) {
+        if (openAfterFetch) {
+          triggerFileDownload(attachment.url, attachment.name);
+        }
+        return;
+      }
+
+      if (!attachment.fetchData) {
+        setResolvedMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  attachments: m.attachments.map((att) =>
+                    att.id === attachmentId
+                      ? { ...att, status: 'error', error: 'Attachment data unavailable' }
+                      : att
+                  ),
+                }
+              : m
+          )
+        );
+        setToastMessage('Attachment data unavailable.');
+        return;
+      }
+
+      const attachmentMeta = {
+        name: attachment.name,
+        type: attachment.type,
+        fetchData: attachment.fetchData,
+      };
+
+      attachmentCacheRef.current[attachmentId] = {
+        ...(attachmentCacheRef.current[attachmentId] ?? { status: 'idle' }),
+        status: 'loading',
+        error: undefined,
+      };
+      setAttachmentErrors((prev) => {
+        const { [attachmentId]: _removed, ...rest } = prev;
+        return rest;
+      });
+
+      if (attachment.status !== 'loading') {
+        setResolvedMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  attachments: m.attachments.map((att) =>
+                    att.id === attachmentId
+                      ? { ...att, status: 'loading', error: undefined }
+                      : att
+                  ),
+                }
+              : m
+          )
+        );
+      }
+
+      attachmentMeta
+        .fetchData()
+        .then((raw) => {
+          if (!raw) {
+            throw new Error('Attachment data unavailable');
+          }
+          const byteArray = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+          const buffer = byteArray.buffer.slice(
+            byteArray.byteOffset,
+            byteArray.byteOffset + byteArray.byteLength
+          ) as ArrayBuffer;
+          const blob = new Blob([buffer], {
+            type: attachmentMeta.type || 'application/octet-stream',
+          });
+          const objectUrl = URL.createObjectURL(blob);
+          const existingUrl = attachmentUrlsRef.current.get(attachmentId);
+          if (existingUrl) {
+            URL.revokeObjectURL(existingUrl);
+          }
+          attachmentUrlsRef.current.set(attachmentId, objectUrl);
+          attachmentCacheRef.current[attachmentId] = {
+            status: 'ready',
+            url: objectUrl,
+          };
+          setResolvedMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    attachments: m.attachments.map((att) =>
+                      att.id === attachmentId
+                        ? {
+                            ...att,
+                            status: 'ready',
+                            url: objectUrl,
+                            error: undefined,
+                          }
+                        : att
+                    ),
+                  }
+                : m
+            )
+          );
+          setAttachmentErrors((prev) => {
+            const { [attachmentId]: _removed, ...rest } = prev;
+            return rest;
+          });
+          if (openAfterFetch) {
+            triggerFileDownload(objectUrl, attachmentMeta.name);
+          }
+        })
+        .catch((err) => {
+          const messageText =
+            err instanceof Error
+              ? err.message.includes('502')
+                ? 'Attachment temporarily unavailable (502 Bad Gateway)'
+                : err.message
+              : 'Failed to fetch attachment';
+
+          const existingUrl = attachmentUrlsRef.current.get(attachmentId);
+          if (existingUrl) {
+            URL.revokeObjectURL(existingUrl);
+            attachmentUrlsRef.current.delete(attachmentId);
+          }
+          attachmentCacheRef.current[attachmentId] = {
+            status: 'error',
+            error: messageText,
+          };
+
+          setResolvedMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    attachments: m.attachments.map((att) =>
+                      att.id === attachmentId
+                        ? { ...att, status: 'error', error: messageText }
+                        : att
+                    ),
+                  }
+                : m
+            )
+          );
+          setAttachmentErrors((prev) => ({
+            ...prev,
+            [attachmentId]: messageText,
+          }));
+          setToastMessage(messageText);
+        });
+    },
+    [resolvedMessages, triggerFileDownload]
+  );
+
+  const handleAttachmentClick = useCallback(
+    (messageId: string, attachmentId: string) => {
+      fetchAttachmentData(messageId, attachmentId, true);
+    },
+    [fetchAttachmentData]
+  );
+
+  const handleAttachmentImageError = useCallback((attachmentId: string) => {
+    const existingUrl = attachmentUrlsRef.current.get(attachmentId);
+    if (existingUrl) {
+      URL.revokeObjectURL(existingUrl);
+      attachmentUrlsRef.current.delete(attachmentId);
+    }
+    attachmentCacheRef.current[attachmentId] = {
+      ...(attachmentCacheRef.current[attachmentId] ?? { status: 'error' }),
+      status: 'error',
+      url: undefined,
+      error: 'Image failed to load',
+    };
+    setAttachmentErrors((prev) => ({
+      ...prev,
+      [attachmentId]: 'Image failed to load',
+    }));
+  }, []);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -155,56 +433,83 @@ export function ChatWindow({
 
   useEffect(() => {
     const resolveMessages = async () => {
+      setGlobalAttachmentError(null);
+      const seenKeys = new Set<string>();
+      const errorsFromCache: Record<string, string> = {};
+
       try {
-        const resolved = await Promise.all(
-          messages.map(async (message, index) => {
-            const attachments: any = []
-            /**await Promise.all(
-              (message.attachments || []).map(async (attachment, attIndex) => {
-                try {
-                  const data = attachment.data instanceof Promise ? await attachment.data : attachment.data || '';
-                  return {
-                    name: attachment.fileName || 'Unknown File',
-                    type: attachment.mimeType || 'application/octet-stream',
-                    size: typeof attachment.fileSize === 'number' ? attachment.fileSize : 0,
-                    data,
-                  };
-                } catch (err) {
-                  const errorMsg = err instanceof Error ? err.message.includes('502') ? 'Aggregator unavailable (502 Bad Gateway)' : err.message : 'Failed to fetch attachment';
-                  setAttachmentErrors(prev => ({
-                    ...prev,
-                    [`${message.createdAtMs}-${index}-${attIndex}`]: errorMsg,
-                  }));
-                  return {
-                    name: attachment.fileName || 'Unknown File',
-                    type: attachment.mimeType || 'application/octet-stream',
-                    size: typeof attachment.fileSize === 'number' ? attachment.fileSize : 0,
-                    data: '',
-                  };
-                }
-              })
-            );*/
-            return {
-              id: `${message.createdAtMs}-${index}`,
-              text: message.text,
-              time: formatTimestamp(message.createdAtMs),
-              fromMe: message.sender === currentAccount?.address,
-              attachments,
-            };
-          })
-        );
+        const resolved = messages.map((message, index) => {
+          const attachments =
+            message.attachments?.map((attachment, attIndex) => {
+              const attachmentId = `${message.createdAtMs}-${index}-${attIndex}`;
+              const mimeType = (attachment.mimeType || '').toLowerCase();
+              const isImage = mimeType.startsWith('image/');
+              const fetchData =
+                attachment && attachment.data
+                  ? () =>
+                      attachment.data instanceof Promise
+                        ? attachment.data
+                        : Promise.resolve(attachment.data)
+                  : undefined;
+              if (!attachmentCacheRef.current[attachmentId]) {
+                attachmentCacheRef.current[attachmentId] = { status: 'idle' };
+              }
+              const cacheEntry = attachmentCacheRef.current[attachmentId];
+              if (cacheEntry.url && !attachmentUrlsRef.current.has(attachmentId)) {
+                attachmentUrlsRef.current.set(attachmentId, cacheEntry.url);
+              }
+              if (cacheEntry.error) {
+                errorsFromCache[attachmentId] = cacheEntry.error;
+              }
+              seenKeys.add(attachmentId);
+              return {
+                id: attachmentId,
+                name: attachment.fileName || 'Attachment',
+                type: attachment.mimeType || 'application/octet-stream',
+                size:
+                  typeof attachment.fileSize === 'number'
+                    ? attachment.fileSize
+                    : 0,
+                status: cacheEntry.status,
+                url: cacheEntry.url,
+                error: cacheEntry.error,
+                fetchData,
+                autoLoad: isImage && !!fetchData && cacheEntry.status === 'idle',
+              };
+            }) ?? [];
+
+          return {
+            id: `${message.createdAtMs}-${index}`,
+            text: message.text,
+            time: formatTimestamp(message.createdAtMs),
+            fromMe: message.sender === currentAccount?.address,
+            attachments,
+          };
+        });
         setResolvedMessages(resolved);
+        setAttachmentErrors(errorsFromCache);
+        cleanupAttachmentCaches(seenKeys);
       } catch (err) {
         console.error('Failed to resolve messages:', err);
-        setResolvedMessages([]); // Fallback to empty array to prevent crash
-        //setAttachmentErrors(prev => ({
-          //...prev,
-          //global: 'Chat failed to load due to server error. Please try again.',
-        //}));
+        setGlobalAttachmentError('Chat failed to load due to server error. Please try again.');
+        setToastMessage('Chat failed to load due to server error. Please try again.');
+        cleanupAttachmentCaches(new Set());
+        setAttachmentErrors({});
+        setResolvedMessages([]);
       }
     };
     resolveMessages();
-  }, [messages, currentAccount]);
+  }, [messages, currentAccount, cleanupAttachmentCaches]);
+
+  useEffect(() => {
+    resolvedMessages.forEach((message) => {
+      message.attachments.forEach((attachment) => {
+        if (attachment.autoLoad && attachment.status === 'idle') {
+          fetchAttachmentData(message.id, attachment.id, false);
+        }
+      });
+    });
+  }, [resolvedMessages, fetchAttachmentData]);
 
 
   const handleLoadMore = () => {
@@ -276,10 +581,15 @@ export function ChatWindow({
         )}
 
         <div className="mx-auto max-w-4xl space-y-4">
+          {globalAttachmentError && (
+            <div className="rounded-[1.5rem] border-4 border-vibrant-orange bg-vibrant-yellow px-4 py-3 text-sm font-black text-black text-center">
+              {globalAttachmentError}
+            </div>
+          )}
           {resolvedMessages.length === 0 && !isFetchingMessages ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-vibrant-yellow rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-black">
-                <span className="text-3xl">💬</span>
+                <span className="text-3xl"><FaComments /></span>
               </div>
               <p className="text-black text-lg font-black italic">NO MESSAGES YET</p>
               <p className="text-black/70 text-sm font-bold mt-2">Start the conversation!</p>
@@ -294,51 +604,61 @@ export function ChatWindow({
                   } rounded-[2rem] px-5 py-3 max-w-[70%] text-sm shadow-lg`}
                 >
 
-                  {/**{m.attachments && m.attachments.length > 0 && (
+                  {m.attachments && m.attachments.length > 0 && (
                     <div className="mb-2 space-y-2">
-                      {m.attachments.map((attachment: any, index: number) => {
-                        const errorKey = `${m.id}-${index}`;
-                        const hasError = attachmentErrors[errorKey];
+                      {m.attachments.map((attachment) => {
+                        const hasError =
+                          attachment.error || attachmentErrors[attachment.id];
+                        const isImage = attachment.type?.startsWith('image/');
                         return (
-                          <div key={index} className="bg-black/20 rounded-lg p-2">
+                          <div key={attachment.id} className="bg-black/20 rounded-lg p-2">
                             {hasError ? (
                               <div className="flex items-center gap-2 text-xs text-red-400">
                                 <FaFile className="text-red-400" />
                                 <span className="truncate">{attachment.name}</span>
                                 <span>({hasError})</span>
                               </div>
-                            ) : attachment.type?.startsWith('image/') && attachment.data ? (
-                              <a
-                                href={`data:${attachment.type};base64,${attachment.data}`}
-                                download={attachment.name}
-                                className="inline-block"
-                              >
+                            ) : isImage ? (
+                              attachment.url ? (
                                 <img 
-                                  src={`data:${attachment.type};base64,${attachment.data}`}
+                                  src={attachment.url}
                                   alt={attachment.name}
-                                  className="max-w-full max-h-48 rounded-lg object-contain cursor-pointer"
-                                  onError={() => setAttachmentErrors(prev => ({
-                                    ...prev,
-                                    [errorKey]: 'Image failed to load',
-                                  }))}
+                                  className="max-w-full max-h-48 rounded-lg object-contain border-2 border-black"
+                                  onError={() => handleAttachmentImageError(attachment.id)}
                                 />
-                              </a>
+                              ) : (
+                                <div className="flex items-center justify-center gap-2 rounded-lg border-2 border-black bg-white/60 px-4 py-6 text-xs font-bold text-black">
+                                  <FaSpinner className="w-4 h-4 animate-spin text-black" />
+                                  Loading image…
+                                </div>
+                              )
                             ) : (
-                              <a
-                                href={attachment.data ? `data:${attachment.type};base64,${attachment.data}` : '#'}
-                                download={attachment.name}
-                                className="flex items-center gap-2 text-xs text-gray-400 hover:text-indigo-400 transition-colors"
-                              >
-                                <FaFile className="text-gray-400" />
-                                <span className="truncate">{attachment.name}</span>
-                                <span className="text-gray-500">({formatFileSize(attachment.size)})</span>
-                              </a>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-xs text-black">
+                                  <FaFile className="text-black" />
+                                  <span className="truncate font-bold">{attachment.name}</span>
+                                  <span className="text-black/70">
+                                    ({formatFileSize(attachment.size)})
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleAttachmentClick(m.id, attachment.id)}
+                                  className="p-2 rounded-full bg-vibrant-purple hover:bg-vibrant-pink text-black text-xs font-black border-2 border-black flex items-center justify-center"
+                                  disabled={attachment.status === 'loading'}
+                                >
+                                  {attachment.status === 'loading' ? (
+                                    <FaSpinner className="w-4 h-4 animate-spin text-black" />
+                                  ) : (
+                                    <FaDownload className="w-4 h-4 text-black" />
+                                  )}
+                                </button>
+                              </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
-                  )}*/}
+                  )}
                   
                   {m.text && (
                     <div className="font-bold">{m.text}</div>
@@ -441,10 +761,18 @@ export function ChatWindow({
           </button>
         </form>
       </div>
-
-      {channelError && (
-        <div className="px-4 py-3 bg-vibrant-yellow border-t-4 border-black">
-          <p className="text-black text-sm font-bold">Error: {channelError}</p>
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50">
+          <div className="relative max-w-xs rounded-[1.5rem] border-4 border-black bg-white px-6 py-4 shadow-[10px_10px_0px_0px_rgba(0,0,0,0.15)]">
+            <button
+              onClick={dismissToast}
+              className="absolute top-2 right-2 p-1 rounded-full border-2 border-black bg-vibrant-orange hover:bg-vibrant-yellow transition-colors"
+              aria-label="Dismiss notification"
+            >
+              <Cross2Icon className="w-4 h-4 text-black" />
+            </button>
+            <div className="text-sm font-black text-black pr-6">{toastMessage}</div>
+          </div>
         </div>
       )}
     </div>
