@@ -1,6 +1,5 @@
 import { Button } from "../components/ui/button";
 
-// Import your custom community icons
 import activeUsersIcon from "@/assets/active-users-icon.png";
 import messagesSentIcon from "@/assets/messages-sent-icon.png";
 import friendshipsMadeIcon from "@/assets/friendships-made-icon.png";
