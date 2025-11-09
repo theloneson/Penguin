@@ -10,7 +10,7 @@ const Hero = ({ onStartChatting }: HeroProps) => {
   const currentAccount = useCurrentAccount();
 
   const handleStartChatting = () => {
-    onStartChatting(); // Tell Init we're starting wallet flow
+    onStartChatting(); 
   };
 
   return (
@@ -29,25 +29,30 @@ const Hero = ({ onStartChatting }: HeroProps) => {
               <Button 
                 size="lg" 
                 onClick={handleStartChatting}
-                className="bg-black text-white hover:bg-black/90 text-xl px-10 py-7 rounded-full font-bold btn-3d"
+                className="bg-black text-white hover:bg-black/90 text-xl px-10 py-7 rounded-full font-bold transform hover:translate-y-[-4px] transition-all duration-200"
+                style={{ boxShadow: '0 8px 0 0 rgba(0,0,0,0.8)' }}
               >
                 START CHATTING
               </Button>
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-4 border-black text-black hover:bg-black hover:text-white text-xl px-10 py-7 rounded-full font-bold btn-3d"
+                className="border-4 border-black bg-white text-black hover:bg-black hover:text-white text-xl px-10 py-7 rounded-full font-bold transform hover:translate-y-[-4px] transition-all duration-200"
+                style={{ boxShadow: '0 8px 0 0 rgba(0,0,0,0.8)' }}
               >
                 LEARN MORE
               </Button>
             </div>
           </div>
           <div className="flex justify-center">
-            <div className="relative">
+            <div className="relative transform hover:translate-y-[-8px] transition-transform duration-300">
               <img 
                 src={mascot} 
                 alt="PenguinChat Mascot" 
-                className="w-full max-w-lg rounded-[3rem] shadow-2xl animate-float card-3d" 
+                className="w-full max-w-lg rounded-[4rem] border-4 border-black animate-float"
+                style={{ 
+                  boxShadow: '0 20px 0 0 rgba(0,0,0,0.8), 0 30px 60px rgba(0,0,0,0.3)' 
+                }}
               />
             </div>
           </div>
