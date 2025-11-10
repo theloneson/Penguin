@@ -20,7 +20,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
     isReady 
   } = useMessaging();
   
-  // [KEEP ALL YOUR ORIGINAL STATE AND LOGIC EXACTLY THE SAME]
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
-  // [KEEP ALL YOUR ORIGINAL USEFFECTS AND HANDLERS EXACTLY THE SAME]
+  
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -249,7 +249,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
 
   return (
     <div className="w-full h-full bg-white border-r border-gray-200">
-      {/* Header - Clean with subtle Penguin accent */}
+      {/* Header*/}
       <div className="bg-slate-50 px-6 py-5 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -277,7 +277,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
           </div>
         </div>
 
-        {/* Search Bar - Clean and functional */}
+        {/* Search Bar */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
             <MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />
@@ -292,7 +292,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
         </div>
       </div>
 
-      {/* Search Results - Professional */}
+      {/* Search Results */}
       {searchQuery && (
         <div className="px-6 py-3 bg-white border-b border-gray-200">
           <div className="space-y-2">
@@ -342,7 +342,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
         </div>
       )}
 
-      {/* Filter Tabs - Minimal */}
+      {/* Filter Tabs*/}
       <div className="px-6 py-3 bg-white border-b border-gray-200">
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
           <button 
@@ -368,7 +368,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
         </div>
       </div>
 
-      {/* Create Group Modal - Clean overlay */}
+      {/* Create Group Modal */}
       {showCreateGroup && (
         <div className="absolute inset-0 z-50 bg-white flex flex-col">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -469,7 +469,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
         </div>
       )}
 
-      {/* Chat List - Clean Telegram-like */}
+      {/* Chat List, Omo I tried going with the telegram look, I got tired halfway */}
       <div className="h-full overflow-y-auto bg-white">
         {chatItems.length > 0 ? (
           <ul className="list-none m-0 p-0">
