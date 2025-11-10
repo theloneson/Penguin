@@ -267,23 +267,24 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
               onClick={() => setShowCreateGroup(true)}
               className="p-3 rounded-full cursor-pointer bg-vibrant-purple border-4 border-black hover:bg-vibrant-pink transition-colors"
             >
-              <PlusIcon className="w-5 h-5 text-black" />
+              <PlusIcon className="w-5 h-5 text-black"/>
             </button>
             <button onClick={()=>disconnect()} className="p-3 rounded-full cursor-pointer bg-vibrant-orange border-4 border-black hover:bg-vibrant-yellow transition-colors">
-              <FaDoorOpen className="w-5 h-5 text-black" />
+              <FaDoorOpen className="w-5 h-5 text-black"/>
             </button>
           </div>
         </div>
         <div className="relative my-4">
           <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-            <MagnifyingGlassIcon className="w-5 h-5 text-black" />
+            <MagnifyingGlassIcon className="w-5 h-5 text-black"/>
           </div>
           <input
             type="text"
             placeholder="Search chats or enter Sui address/SuiNS name"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setValidationError(""); setValidStatus("idle")}}
-            className="w-full p-3 titillium-web-bold pl-12 rounded-full bg-vibrant-mint text-black placeholder-black/60 border-4 border-black focus:bg-vibrant-yellow hover:bg-vibrant-yellow/50 transition-colors outline-none"
+            className="w-full p-3 titillium-web-bold pl-12 rounded-full bg-vibrant-mint text-black placeholder-black/60 border-4 
+                      border-black focus:bg-vibrant-yellow hover:bg-vibrant-yellow/50 transition-colors outline-none"
           />
         </div>
           {searchQuery && (
