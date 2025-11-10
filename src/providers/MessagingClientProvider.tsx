@@ -55,8 +55,10 @@ export const MessagingClientProvider = ({
           SuiStackMessagingClient.experimental_asClientExtension({
             storage: (client) =>
               new WalrusStorageAdapter(client, {
-                publisher: 'https://publisher.walrus-testnet.walrus.space',
+                //publisher: 'https://publisher.walrus-testnet.walrus.space',
                 aggregator: 'https://aggregator.testnet.walrus.mirai.cloud',
+                publisher: 'https://walrus-publisher.rubynodes.io',
+                //aggregator: 'https://walrus-testnet-aggregator.nodes.guru',
                 epochs: 10,
               }),
             sessionKey,
