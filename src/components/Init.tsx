@@ -16,7 +16,7 @@ import DesktopLayout from "./DesktopLayout";
 import { useMessaging } from '../hooks/useMessaging';
 import { useSessionKey } from '../providers/SessionKeyProvider';
 
-// Import Loveable.dev components
+// Import components
 import Navigation from "./Navigation";
 import Hero from "./Hero";
 import Features from "./Features";
@@ -57,14 +57,13 @@ export function Init() {
     }
   };
 
-  // If user is fully connected and ready, show the main app
   if (currentAccount && sessionKey && isReady) {
     return <DesktopLayout />;
   }
 
-  // Only show wallet flow if user has initiated connection
+  
   if (showWalletFlow) {
-    // If user needs to sign session key
+  
     if (currentAccount && !sessionKey && !isInitializing) {
       return (
         <div className="w-full h-full bg-gray-900 flex flex-col items-center justify-center titillium-web-regular">
@@ -125,7 +124,7 @@ export function Init() {
     }
   }
 
-  // MAIN LANDING PAGE - Show this first by default!
+  // MAIN LANDING PAGE
   return (
     <div className="min-h-screen">
       <Navigation 
