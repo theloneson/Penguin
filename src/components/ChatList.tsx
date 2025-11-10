@@ -216,6 +216,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
     })
   );
 
+  // Fixed chat items mapping - using proper variable names
   const chatItems = filteredChannels
     .sort((a, b) => {
       const aTime = a.last_message ? a.last_message.createdAtMs : a.created_at_ms;
@@ -227,13 +228,14 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
       const memberCount = channel.auth.member_permissions.contents.length;
       const isGroup = memberCount > 2;
       
+      // Fixed: using proper variable names
       const displayName = isGroup 
-        ? Group ${channelId.slice(0, 5)}...${channelId.slice(-5)}
-        : ${channelId.slice(0, 5)}...${channelId.slice(-5)};
+        ? `Group ${channelId.slice(0, 5)}...${channelId.slice(-5)}`
+        : `${channelId.slice(0, 5)}...${channelId.slice(-5)}`;
       
       return {
         id: channel.id.id,
-        name: displayName,
+        name: displayName, // Fixed: using displayName
         lastMessage: channel.last_message?.text || 'No messages yet',
         time: channel.last_message 
           ? formatTimestamp(channel.last_message.createdAtMs)
@@ -434,7 +436,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
               disabled={!isReady || isCreatingChannel || addressTags.length < 2}
               className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
-              {isCreatingChannel ? 'Creating...' : Create Group (${addressTags.length})}
+              {isCreatingChannel ? 'Creating...' : `Create Group (${addressTags.length})`}
             </button>
             <button
               type="button"
