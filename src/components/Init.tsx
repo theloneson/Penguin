@@ -15,6 +15,7 @@ import { FaWallet, FaGoogle, FaSpinner } from 'react-icons/fa';
 import DesktopLayout from "./DesktopLayout";
 import { useMessaging } from '../hooks/useMessaging';
 import { useSessionKey } from '../providers/SessionKeyProvider';
+import SplashScreen from "./SplashScreen";
 
 // Import Loveable.dev components
 import Navigation from "./Navigation";
@@ -25,6 +26,7 @@ import Community from "./Community";
 import Footer from "./Footer";
 
 export function Init() {
+  const [showSplash, setShowSplash] = useState(true);
   const currentAccount = useCurrentAccount();
   const [open, setOpen] = useState(false);
   const [showWalletFlow, setShowWalletFlow] = useState(false);
@@ -56,6 +58,11 @@ export function Init() {
       setOpen(true);
     }
   };
+
+  // Show splash screen first
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
 
   // If user is fully connected and ready, show the main app
   if (currentAccount && sessionKey && isReady) {
