@@ -14,7 +14,7 @@ const queryClient = new QueryClient();
 const createClient = () => {
   return new SuiClient({
     //url: "https://fullnode.testnet.sui.io:443",
-    url: "https://sui-testnet-endpoint.blockvision.org",
+    url: "https://fullnode.testnet.sui.io:443",
     mvr: {
       overrides: {
         packages: {
