@@ -11,11 +11,11 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Show splash for 8 seconds then fade out
+    // Show splash for 6 seconds then fade out
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(onFinish, 500);
-    }, 8000);
+    }, 6000);
 
     return () => clearTimeout(timer);
   }, [onFinish]);
