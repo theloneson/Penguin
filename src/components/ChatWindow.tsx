@@ -1340,7 +1340,7 @@ const extractSymbolFromCoinType = (coinType: string) => {
       
       <div className="px-4 py-4 bg-gray-100 flex items-center gap-3 shrink-0 border-t border-gray-200 relative">
         {showEmojiPicker && (
-          <div className="absolute bottom-full mb-3 left-4 z-10">
+          <div className="absolute bottom-full right-0 mb-3 z-20 drop-shadow-xl">
             <EmojiPicker
               onEmojiClick={(emojiObject) => {
                 setMessageText(prev => prev + emojiObject.emoji);
@@ -1348,7 +1348,7 @@ const extractSymbolFromCoinType = (coinType: string) => {
               }}
               theme={Theme.LIGHT}
               skinTonesDisabled
-              width={window.innerWidth}
+              width={320}
             />
           </div>
         )}
