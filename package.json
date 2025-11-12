@@ -17,6 +17,7 @@
     "@mysten/seal": "^0.6.0",
     "@mysten/sui": "1.38.0",
     "@mysten/sui-grpc": "^0.1.0",
+    "@mysten/suins": "^0.7.15",
     "@mysten/walrus": "^0.7.0",
     "@protobuf-ts/grpcweb-transport": "^2.11.1",
     "@radix-ui/colors": "^3.0.0",

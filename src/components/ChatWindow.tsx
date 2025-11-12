@@ -1,13 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { DotsVerticalIcon, FaceIcon, PaperPlaneIcon, Cross2Icon } from '@radix-ui/react-icons';
-import { FaPaperclip, FaChevronLeft, FaImage, FaFile, FaComments, FaSpinner, FaDownload, FaMicrophone, FaStop, FaPlay, FaPause, FaGift } from 'react-icons/fa';
+import { FaPaperclip, FaChevronLeft, FaImage, FaFile, FaComments, FaSpinner, FaDownload, FaMicrophone, FaStop, FaPlay, FaPause, FaGift, FaPen } from 'react-icons/fa';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { useMessaging } from '../hooks/useMessaging';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { formatTimestamp } from '../utils/formatter';
 import bgImg from '../assets/bg-img.png';
-import { useSuiClient, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useSuiClient, useSignAndExecuteTransaction, useSuiClientContext } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+import { buildSuinsRegistrationTransaction, checkSuinsAvailability, getOwnedSuinsNames, isValidSuinsLabel, OwnedSuinsEntry } from '../lib/utils';
 
 const AudioAttachmentPlayer = ({ url, name }: { url: string; name: string }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -108,6 +109,8 @@ export function ChatWindow({
     getChannelById,
     fetchMessages,
     sendMessage,
+    setChannelGroupName,
+    getCreatorCapForChannel,
     isFetchingMessages,
     isSendingMessage,
     messagesCursor,
@@ -169,6 +172,17 @@ type TokenOption = {
   const [giftAmount, setGiftAmount] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [isLoadingTokens, setIsLoadingTokens] = useState(false);
+  const [isGroupNameModalOpen, setIsGroupNameModalOpen] = useState(false);
+  const [groupNameLabel, setGroupNameLabel] = useState('');
+  const [resolvedGroupName, setResolvedGroupName] = useState<{ name: string; nftId: string } | null>(null);
+  const [groupNameFormError, setGroupNameFormError] = useState<string | null>(null);
+  const [isCheckingGroupName, setIsCheckingGroupName] = useState(false);
+  const [isRenamingGroup, setIsRenamingGroup] = useState(false);
+  const [hasCreatorCap, setHasCreatorCap] = useState(false);
+  const [groupNameStatus, setGroupNameStatus] = useState<'idle' | 'available' | 'owned-by-user' | 'owned-by-other'>('idle');
+  const [normalizedGroupName, setNormalizedGroupName] = useState<string | null>(null);
+  const [ownedSuinsEntries, setOwnedSuinsEntries] = useState<OwnedSuinsEntry[]>([]);
+  const { network } = useSuiClientContext();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentUrlsRef = useRef<Map<string, string>>(new Map());
@@ -421,6 +435,94 @@ const extractSymbolFromCoinType = (coinType: string) => {
     );
   }, [channelMembers, currentAccount]);
 
+  const isGroupChannel = useMemo(() => channelMembers.length > 2, [channelMembers]);
+
+  const deriveNameString = useCallback((value: unknown): string | null => {
+    if (!value) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    }
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      const candidates = ['display_name', 'displayName', 'name', 'value'];
+      for (const key of candidates) {
+        const candidate = record[key];
+        if (typeof candidate === 'string') {
+          const trimmed = candidate.trim();
+          if (trimmed.length) {
+            return trimmed;
+          }
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  const channelDisplayName = useMemo(() => {
+    if (!currentChannel) {
+      return null;
+    }
+
+    const possibleValues: Array<string | null> = [
+      deriveNameString((currentChannel as any)?.groupMetadata?.name),
+      deriveNameString((currentChannel as any)?.group_name),
+      deriveNameString((currentChannel as any)?.groupName),
+      deriveNameString((currentChannel as any)?.metadata?.group_name),
+      deriveNameString((currentChannel as any)?.metadata?.name),
+      deriveNameString((currentChannel as any)?.metadata?.display_name),
+      deriveNameString((currentChannel as any)?.name),
+    ];
+
+    for (const candidate of possibleValues) {
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }, [currentChannel, deriveNameString]);
+
+  useEffect(() => {
+    if (currentChannel) {
+      console.log('[ChatWindow] Current channel details', {
+        id: currentChannel.id?.id,
+        group_name: (currentChannel as any)?.group_name,
+        groupMetadata: (currentChannel as any)?.groupMetadata,
+        metadata: (currentChannel as any)?.metadata ?? (currentChannel as any)?.data?.metadata,
+        raw: currentChannel,
+      });
+    }
+  }, [currentChannel]);
+
+  const showGroupNameOption = isGroupChannel && hasCreatorCap;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!channelId || !isGroupChannel) {
+      setHasCreatorCap(false);
+      return;
+    }
+
+    getCreatorCapForChannel(channelId)
+      .then((capId) => {
+        if (!cancelled) {
+          setHasCreatorCap(!!capId);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHasCreatorCap(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId, isGroupChannel, getCreatorCapForChannel]);
+
   const selectedTokenInfo = useMemo(() => {
     if (!selectedTokenType) return null;
     return tokenOptions.find((option) => option.coinType === selectedTokenType) ?? null;
@@ -470,6 +572,254 @@ const extractSymbolFromCoinType = (coinType: string) => {
         setToastMessage('Failed to load wallet tokens. Please try again.');
       });
   }, [otherParticipants, isLoadingTokens, tokenOptions, refreshTokens, selectedRecipient]);
+
+  const handleGroupNameCheck = useCallback(async () => {
+    const label = groupNameLabel.trim().toLowerCase();
+
+    if (!label) {
+      setGroupNameFormError('Enter a SuiNS name to continue.');
+      setResolvedGroupName(null);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+      return;
+    }
+
+    if (!isValidSuinsLabel(label)) {
+      setGroupNameFormError('Names can only include a-z, 0-9, and hyphens (not at the start or end).');
+      setResolvedGroupName(null);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+      return;
+    }
+
+    const formattedInput = `${label}.sui`;
+    const cachedEntry = ownedSuinsEntries.find(
+      (entry) => entry.normalizedName === formattedInput,
+    );
+    if (
+      cachedEntry &&
+      currentAccount?.address &&
+      cachedEntry.owner === currentAccount.address.toLowerCase()
+    ) {
+      setGroupNameLabel(cachedEntry.normalizedName.replace(/\.sui$/, ''));
+      setNormalizedGroupName(cachedEntry.normalizedName);
+      setGroupNameStatus('owned-by-user');
+      setResolvedGroupName({
+        name: cachedEntry.normalizedName,
+        nftId: cachedEntry.objectId,
+      });
+      setGroupNameFormError(null);
+      return;
+    }
+    if (!currentAccount?.address) {
+      setGroupNameFormError('Connect your wallet to continue.');
+      setResolvedGroupName(null);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+      return;
+    }
+
+    if (network !== 'mainnet' && network !== 'testnet') {
+      setGroupNameFormError('SuiNS lookups are only supported on mainnet or testnet networks.');
+      setResolvedGroupName(null);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+      return;
+    }
+
+    const supportedNetwork = network as 'mainnet' | 'testnet';
+
+    setIsCheckingGroupName(true);
+    setGroupNameFormError(null);
+    setResolvedGroupName(null);
+    setGroupNameStatus('idle');
+    setNormalizedGroupName(null);
+    try {
+      const result = await checkSuinsAvailability({
+        client: suiClient,
+        network: supportedNetwork,
+        name: formattedInput,
+        ownerAddress: currentAccount.address,
+      });
+
+      setNormalizedGroupName(result.normalizedName);
+      setGroupNameStatus(result.status);
+
+      if (result.status === 'owned-by-user' && result.nftId) {
+        setResolvedGroupName({
+          name: result.normalizedName,
+          nftId: result.nftId,
+        });
+        setGroupNameLabel(result.normalizedName.slice(0, -4));
+        setGroupNameFormError(null);
+      } else if (result.status === 'available') {
+        setGroupNameLabel(result.normalizedName.slice(0, -4));
+        setGroupNameFormError(null);
+      } else {
+        setGroupNameFormError('This SuiNS name is unavailable');
+      }
+      setOwnedSuinsEntries(getOwnedSuinsNames());
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to resolve SuiNS name. Please try again.';
+      setGroupNameFormError(message);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+      setResolvedGroupName(null);
+    } finally {
+      setIsCheckingGroupName(false);
+    }
+  }, [groupNameLabel, currentAccount?.address, suiClient, network, ownedSuinsEntries]);
+
+  const handleGroupNameSubmit = useCallback(async () => {
+    if (!channelId) {
+      return;
+    }
+
+    if (!currentAccount?.address) {
+      setGroupNameFormError('Connect your wallet to continue.');
+      return;
+    }
+
+    if (network !== 'mainnet' && network !== 'testnet') {
+      setGroupNameFormError('SuiNS actions are only supported on mainnet or testnet networks.');
+      return;
+    }
+
+    const supportedNetwork = network as 'mainnet' | 'testnet';
+
+    const baseLabel = normalizedGroupName
+      ? normalizedGroupName.slice(0, -4)
+      : groupNameLabel.trim().toLowerCase();
+
+    if (!baseLabel) {
+      setGroupNameFormError('Enter a valid SuiNS name.');
+      return;
+    }
+
+    if (!isValidSuinsLabel(baseLabel)) {
+      setGroupNameFormError('Names can only include a-z, 0-9, and hyphens (not at the start or end).');
+      return;
+    }
+
+    const effectiveName = normalizedGroupName ?? `${baseLabel}.sui`;
+
+    if (groupNameStatus === 'available') {
+      setIsRenamingGroup(true);
+      setGroupNameFormError(null);
+      try {
+        const { transaction, normalizedName } =
+          await buildSuinsRegistrationTransaction({
+            client: suiClient,
+            network: supportedNetwork,
+            name: effectiveName,
+            recipientAddress: currentAccount.address,
+            years: 1,
+          });
+
+        const { digest } = await signAndExecuteTransaction({ transaction });
+
+        await suiClient.waitForTransaction({
+          digest,
+          options: { showEffects: true },
+        });
+
+        const ownership = await checkSuinsAvailability({
+          client: suiClient,
+          network: supportedNetwork,
+          name: normalizedName,
+          ownerAddress: currentAccount.address,
+        });
+
+        if (ownership.status !== 'owned-by-user' || !ownership.nftId) {
+          setGroupNameStatus(ownership.status);
+          setGroupNameFormError(
+            'Name purchased, but ownership data is not yet available. Please try again shortly.',
+          );
+          return;
+        }
+
+        setResolvedGroupName({
+          name: ownership.normalizedName,
+          nftId: ownership.nftId,
+        });
+        setGroupNameLabel(ownership.normalizedName.slice(0, -4));
+        setGroupNameStatus('owned-by-user');
+      setOwnedSuinsEntries(getOwnedSuinsNames());
+
+        const result = await setChannelGroupName(
+          channelId,
+          ownership.nftId,
+        );
+        if (!result) {
+          throw new Error('Failed to set group name. Please try again.');
+        }
+
+        setToastMessage(`Group name updated to ${ownership.name}.`);
+        setIsGroupNameModalOpen(false);
+      setOwnedSuinsEntries(getOwnedSuinsNames());
+      } catch (error) {
+        let message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to buy SuiNS name. Please try again.';
+
+        if (message.includes('assert_app_is_authorized')) {
+          message =
+            'Automatic purchase is not available on this network. Please register the SuiNS name manually on suins.io and try again.';
+        }
+
+        setGroupNameFormError(message);
+      } finally {
+        setIsRenamingGroup(false);
+      }
+      return;
+    }
+
+    if (!resolvedGroupName || groupNameStatus !== 'owned-by-user') {
+      setGroupNameFormError('Check the SuiNS name before saving.');
+      return;
+    }
+
+    setIsRenamingGroup(true);
+    setGroupNameFormError(null);
+    try {
+      const result = await setChannelGroupName(channelId, resolvedGroupName.nftId);
+      if (!result) {
+        throw new Error('Failed to set group name. Please try again.');
+      }
+
+      setToastMessage(`Group name updated to ${resolvedGroupName.name}.`);
+      setIsGroupNameModalOpen(false);
+      setOwnedSuinsEntries(getOwnedSuinsNames());
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to set group name. Please try again.';
+      setGroupNameFormError(message);
+    } finally {
+      setIsRenamingGroup(false);
+    }
+  }, [
+    channelId,
+    currentAccount?.address,
+    groupNameLabel,
+    groupNameStatus,
+    normalizedGroupName,
+    network,
+    resolvedGroupName,
+    setChannelGroupName,
+    setIsGroupNameModalOpen,
+    setToastMessage,
+    signAndExecuteTransaction,
+    suiClient,
+  ]);
+
+  const handleGroupNameModalClose = useCallback(() => {
+    setIsGroupNameModalOpen(false);
+    setGroupNameStatus('idle');
+    setNormalizedGroupName(null);
+    setGroupNameLabel('');
+  }, []);
 
   const ALLOWED_FILE_TYPES = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
@@ -987,6 +1337,24 @@ const extractSymbolFromCoinType = (coinType: string) => {
     });
   }, [resolvedMessages, fetchAttachmentData]);
 
+  useEffect(() => {
+    if (!isGroupNameModalOpen) {
+      setGroupNameLabel('');
+      setResolvedGroupName(null);
+      setGroupNameFormError(null);
+      setIsCheckingGroupName(false);
+      setIsRenamingGroup(false);
+      setGroupNameStatus('idle');
+      setNormalizedGroupName(null);
+    }
+  }, [isGroupNameModalOpen]);
+
+  useEffect(() => {
+    if (isGroupNameModalOpen) {
+      setOwnedSuinsEntries(getOwnedSuinsNames());
+    }
+  }, [isGroupNameModalOpen]);
+
 
   const handleLoadMore = () => {
     if (messagesCursor && !isFetchingMessages) {
@@ -1002,11 +1370,18 @@ const extractSymbolFromCoinType = (coinType: string) => {
     }
   };
 
-  const contactName = currentChannel 
+  const contactName = channelDisplayName
+    ? channelDisplayName
+    : currentChannel
     ? `${currentChannel.id.id.slice(0, 5)}...${currentChannel.id.id.slice(-5)}`
     : 'Unknown Chat';
 
   const hasSendableContent = messageText.trim().length > 0 || selectedFiles.length > 0;
+  const groupPrimaryActionLabel =
+    groupNameStatus === 'available' ? 'Buy Name' : 'Set Name';
+  const canSubmitGroupAction =
+    groupNameStatus === 'available' ||
+    (groupNameStatus === 'owned-by-user' && !!resolvedGroupName);
 
   const handleGiftModalClose = () => {
     setIsGiftModalOpen(false);
@@ -1173,6 +1548,29 @@ const extractSymbolFromCoinType = (coinType: string) => {
                 <FaGift className="w-4 h-4 text-purple-500" />
                 <span>Send Gift</span>
               </button>
+              {showGroupNameOption && (
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    let initialLabel = channelDisplayName
+                      ? channelDisplayName.toLowerCase().replace(/\.sui$/, '')
+                      : '';
+                    if (!isValidSuinsLabel(initialLabel)) {
+                      initialLabel = '';
+                    }
+                    setGroupNameLabel(initialLabel);
+                    setResolvedGroupName(null);
+                    setGroupNameFormError(null);
+                    setGroupNameStatus('idle');
+                    setNormalizedGroupName(null);
+                    setIsGroupNameModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-purple-50 transition-colors border-t border-gray-100"
+                >
+                  <FaPen className="w-4 h-4 text-purple-500" />
+                  <span>Set Group Name</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1512,6 +1910,125 @@ const extractSymbolFromCoinType = (coinType: string) => {
                 className="rounded-lg bg-purple-500 px-5 py-2 text-sm font-medium text-white hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSendingGift ? 'Sending...' : 'Send Gift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isGroupNameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 text-center">Set Group Name</h2>
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide">SuiNS Name</label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-1">
+                    <input
+                      type="text"
+                      value={groupNameLabel}
+                      onChange={(event) => {
+                        const raw = event.target.value.toLowerCase();
+                        let nextLabel = raw.replace(/[^a-z0-9-]/g, '');
+                        nextLabel = nextLabel.replace(/^-+/, '').replace(/-+$/, '');
+                        setGroupNameLabel(nextLabel);
+                        setResolvedGroupName(null);
+                        setGroupNameFormError(null);
+                        setGroupNameStatus('idle');
+                        setNormalizedGroupName(null);
+                      }}
+                      placeholder="groupname"
+                      className="flex-1 rounded-l-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:border-purple-500"
+                    />
+                    <span className="px-3 py-2 border border-l-0 border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 rounded-r-lg select-none">
+                      .sui
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleGroupNameCheck}
+                    type="button"
+                    disabled={isCheckingGroupName || !groupNameLabel}
+                    className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCheckingGroupName ? 'Checking...' : 'Check'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  You can only buy or assign SuiNS names that your connected wallet owns.
+                </p>
+              </div>
+            </div>
+
+            {groupNameStatus === 'available' && (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+                <span className="font-semibold">
+                  {(normalizedGroupName ?? (groupNameLabel ? `${groupNameLabel}.sui` : '')).toLowerCase()}
+                </span>{' '}
+                is available.
+              </div>
+            )}
+
+            {resolvedGroupName && (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+                Name confirmed: <span className="font-semibold">{resolvedGroupName.name}</span>
+              </div>
+            )}
+
+            {groupNameFormError && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+                {groupNameFormError}
+              </div>
+            )}
+
+            {ownedSuinsEntries.length > 0 && (
+              <div className="mt-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Owned Names
+                </p>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                  {ownedSuinsEntries.map((entry) => (
+                    <button
+                      key={entry.objectId}
+                      onClick={() => {
+                        const labelValue = entry.normalizedName.replace(/\.sui$/, '');
+                        setGroupNameLabel(labelValue);
+                        setNormalizedGroupName(entry.normalizedName);
+                        setGroupNameStatus('owned-by-user');
+                        setResolvedGroupName({
+                          name: entry.normalizedName,
+                          nftId: entry.objectId,
+                        });
+                        setGroupNameFormError(null);
+                      }}
+                      className="px-3 py-1 rounded-full border border-gray-200 bg-gray-100 text-xs font-medium text-gray-700 hover:bg-purple-100 hover:border-purple-300 transition-colors"
+                    >
+                      {entry.normalizedName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={handleGroupNameModalClose}
+                type="button"
+                className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGroupNameSubmit}
+                type="button"
+                disabled={!canSubmitGroupAction || isRenamingGroup}
+                className="rounded-lg bg-purple-500 px-5 py-2 text-sm font-medium text-white hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRenamingGroup
+                  ? groupNameStatus === 'available'
+                    ? 'Buying...'
+                    : 'Saving...'
+                  : groupPrimaryActionLabel}
               </button>
             </div>
           </div>

@@ -55,6 +55,8 @@ public struct Channel has key {
     /// Holds the latest key, the latest_version,
     /// and a TableVec of the historical keys
     encryption_key_history: EncryptionKeyHistory,
+    /// Optional SuiNS group name NFT address associated with this channel.
+    group_name: Option<address>,
 }
 
 // === Witnesses ===
@@ -117,6 +119,7 @@ public fun new(
         created_at_ms: clock.timestamp_ms(),
         updated_at_ms: clock.timestamp_ms(),
         encryption_key_history: encryption_key_history::empty(ctx),
+        group_name: option::none<address>(),
     };
 
     (channel, creator_cap, creator_member_cap)
@@ -263,6 +266,10 @@ public(package) fun messages_count(self: &Channel): u64 {
     self.messages_count
 }
 
+public(package) fun group_name(self: &Channel): Option<address> {
+    self.group_name
+}
+
 /// Check if a `MemberCap` id is a member of this Channel.
 public(package) fun is_member(self: &Channel, member_cap: &MemberCap): bool {
     object::id(self) == member_cap.channel_id() &&
@@ -272,6 +279,31 @@ public(package) fun is_member(self: &Channel, member_cap: &MemberCap): bool {
 /// Check if a `CreatorCap` is the creator of this Channel.
 public(package) fun is_creator(self: &Channel, creator_cap: &CreatorCap): bool {
     self.id.to_inner() == creator_cap.channel_id()
+}
+
+public entry fun set_group_name(
+    self: &mut Channel,
+    creator_cap: &CreatorCap,
+    group_name_address: address,
+    clock: &Clock,
+) {
+    assert!(Self::is_creator(self, creator_cap), ENotCreator);
+    if (group_name_address == @0x0) {
+        self.group_name = option::none<address>();
+    } else {
+        self.group_name = option::some(group_name_address);
+    };
+    self.updated_at_ms = clock.timestamp_ms();
+}
+
+public entry fun clear_group_name(
+    self: &mut Channel,
+    creator_cap: &CreatorCap,
+    clock: &Clock,
+) {
+    assert!(Self::is_creator(self, creator_cap), ENotCreator);
+    self.group_name = option::none<address>();
+    self.updated_at_ms = clock.timestamp_ms();
 }
 
 // === Private Functions ===

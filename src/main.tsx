@@ -18,7 +18,7 @@ const createClient = () => {
     mvr: {
       overrides: {
         packages: {
-          '@local-pkg/sui-stack-messaging': "0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d", // Or provide your own package ID
+          '@local-pkg/sui-stack-messaging': "0xdf7ed29b942c2bf66c544bd2cf9714a7c90198ef552d74dd79ff2b8bba3af290", // Or provide your own package ID
         },
       },
     },

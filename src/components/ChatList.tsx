@@ -3,7 +3,7 @@ import { MagnifyingGlassIcon, PlusIcon } from '@radix-ui/react-icons';
 import { FaComments, FaUser, FaUsers, FaSpinner } from 'react-icons/fa';
 import { FaDoorOpen } from "react-icons/fa6";
 import { useDisconnectWallet, useCurrentAccount } from "@mysten/dapp-kit";
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMessaging } from '../hooks/useMessaging';
 import { isValidSuiAddress } from '@mysten/sui/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
@@ -196,6 +196,30 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
     }
   };
 
+  const deriveNameString = useCallback((value: unknown): string | null => {
+    if (!value) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    }
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      const candidates = ['display_name', 'displayName', 'name', 'value'];
+      for (const key of candidates) {
+        const candidate = record[key];
+        if (typeof candidate === 'string') {
+          const trimmed = candidate.trim();
+          if (trimmed.length) {
+            return trimmed;
+          }
+        }
+      }
+    }
+    return null;
+  }, []);
+
   const filteredChannels = channels.filter(channel => {
     if (activeFilter === 'groups') {
       return channel.auth.member_permissions.contents.length > 2;
@@ -210,16 +234,6 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
     return channelId.includes(query) || lastMessage.includes(query);
   });
 
-  const isNewAddress = searchQuery.trim() &&
-    (isValidSuiAddress(searchQuery.trim()) || searchQuery.trim().toLowerCase().endsWith('.sui')) &&
-    !channels.some(channel =>
-      channel.auth.member_permissions.contents.some((member: any) => {
-        const memberAddress = typeof member === 'string' ? member : member?.address || member?.id || member;
-        return memberAddress && typeof memberAddress === 'string' &&
-          memberAddress.toLowerCase() === (resolvedAddress || searchQuery.trim()).toLowerCase();
-      })
-    );
-
   const chatItems = filteredChannels
     .sort((a, b) => {
       const aTime = a.last_message ? a.last_message.createdAtMs : a.created_at_ms;
@@ -231,13 +245,25 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
       const memberCount = channel.auth.member_permissions.contents.length;
       const isGroup = memberCount > 2;
 
-      const displayName = isGroup
-        ? `Group ${channelId.slice(0, 5)}...${channelId.slice(-5)}`
-        : `${channelId.slice(0, 5)}...${channelId.slice(-5)}`;
+      const maybeGroupMetadata = deriveNameString((channel as any)?.groupMetadata?.name);
+      const maybeGroupName = deriveNameString((channel as any)?.group_name);
+      const metadata = (channel as any)?.metadata ?? (channel as any)?.data?.metadata;
+      const maybeMetadataName =
+        deriveNameString(metadata?.group_name) ??
+        deriveNameString(metadata?.groupName) ??
+        deriveNameString(metadata?.name) ??
+        deriveNameString(metadata?.display_name);
+      const resolvedDisplayName =
+        maybeGroupMetadata ??
+        maybeGroupName ??
+        maybeMetadataName ??
+        (isGroup
+          ? `Group ${channelId.slice(0, 5)}...${channelId.slice(-5)}`
+          : `${channelId.slice(0, 5)}...${channelId.slice(-5)}`);
 
       return {
         id: channel.id.id,
-        name: displayName,
+        name: resolvedDisplayName,
         lastMessage: channel.last_message?.text || 'No messages yet',
         time: channel.last_message
           ? formatTimestamp(channel.last_message.createdAtMs)

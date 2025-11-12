@@ -1,10 +1,11 @@
 import { useMessagingClient } from '../providers/MessagingClientProvider';
 import { useSessionKey } from '../providers/SessionKeyProvider';
-import { useSignAndExecuteTransaction, useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
-import { useState, useCallback, useEffect } from 'react';
+import { useSignAndExecuteTransaction, useCurrentAccount, useSuiClient, useSuiClientContext } from '@mysten/dapp-kit';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
 import { MESSAGING_PACKAGE_ID, SUI_CLOCK_OBJECT_ID } from '../config/messaging';
 import { DecryptedChannelObject, DecryptMessageResult, ChannelMessagesDecryptedRequest } from '@mysten/messaging';
+import { clearOwnedSuinsCache, getOwnedSuinsByObjectId, normalizeSuinsName, OwnedSuinsEntry, setOwnedSuinsCache } from '../lib/utils';
 
 export const useMessaging = () => {
   const messagingClient = useMessagingClient();
@@ -12,6 +13,7 @@ export const useMessaging = () => {
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
+  const { network: clientNetwork } = useSuiClientContext();
 
   const [channels, setChannels] = useState<DecryptedChannelObject[]>([]);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
@@ -25,45 +27,266 @@ export const useMessaging = () => {
   const [messagesCursor, setMessagesCursor] = useState<bigint | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [memberCapMap, setMemberCapMap] = useState<Record<string, string>>({});
+  const memberCapsCacheRef = useRef<{
+    data: Array<{ channelId: string; memberCapId: string }>;
+    timestamp: number;
+  } | null>(null);
+  const memberCapsPendingRef = useRef<Promise<Array<{ channelId: string; memberCapId: string }>> | null>(null);
+
+  const MEMBER_CAP_CACHE_TTL_MS = 30_000;
+  const MEMBER_CAP_MAX_RETRIES = 4;
+  const MEMBER_CAP_RETRY_BASE_DELAY_MS = 1_000;
+
+  const sleep = useCallback((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)), []);
+
+  const unwrapAddressOption = useCallback((value: unknown): string | null => {
+    if (!value) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.startsWith('0x') ? trimmed : null;
+    }
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      if (typeof record.Some === 'string') {
+        return record.Some.trim();
+      }
+      if (typeof record.some === 'string') {
+        return record.some.trim();
+      }
+      if (record.fields && typeof record.fields === 'object') {
+        const fields = record.fields as Record<string, unknown>;
+        if (typeof fields.some === 'string') {
+          return fields.some.trim();
+        }
+        if (typeof fields.value === 'string') {
+          return fields.value.trim();
+        }
+        if (Array.isArray(fields.vec) && typeof fields.vec[0] === 'string') {
+          return (fields.vec[0] as string).trim();
+        }
+      }
+      if (typeof record.value === 'string') {
+        return record.value.trim();
+      }
+    }
+    return null;
+  }, []);
+
+  const getGroupNameObjectId = useCallback((channel: any): string | null => {
+    const rawChannel = channel?.data ?? channel;
+    const metadata = (rawChannel?.metadata ?? rawChannel?.data?.metadata) as Record<string, unknown> | undefined;
+    const candidates: Array<unknown> = [
+      (rawChannel as any)?.group_name_nft,
+      rawChannel?.group_name,
+      rawChannel?.groupName,
+      rawChannel?.content?.fields?.group_name,
+      metadata?.group_name_nft,
+      metadata?.group_name,
+      metadata?.groupName,
+      (rawChannel as any)?.content?.fields?.group_name,
+    ];
+    for (const candidate of candidates) {
+      const address = unwrapAddressOption(candidate);
+      if (address) {
+        return address.toLowerCase();
+      }
+    }
+    return null;
+  }, [unwrapAddressOption]);
+
+  const augmentChannelWithGroupMetadata = useCallback(async (channel: any) => {
+    if (!channel) {
+      return channel;
+    }
+
+    const groupNameObjectId = getGroupNameObjectId(channel);
+    if (!groupNameObjectId) {
+      return channel;
+    }
+
+    const rawChannel = channel?.data ?? channel;
+    const metadata = (rawChannel?.metadata ?? rawChannel?.data?.metadata) as Record<string, unknown> | undefined;
+    const metadataNameCandidates: Array<unknown> = [
+      metadata?.group_name,
+      metadata?.groupName,
+      metadata?.name,
+      metadata?.display_name,
+      rawChannel?.group_name,
+      rawChannel?.groupName,
+      (channel as any)?.group_name_label,
+    ];
+
+    const metadataName = metadataNameCandidates.find(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
+    const normalizedFromMetadata =
+      metadataName && metadataName.includes('.sui') ? normalizeSuinsName(metadataName) : null;
+
+    const ownedEntry = getOwnedSuinsByObjectId(groupNameObjectId);
+    const normalizedFromCache =
+      typeof (channel as any)?.group_name_normalized === 'string'
+        ? normalizeSuinsName((channel as any).group_name_normalized)
+        : null;
+
+    const nameCandidates: Array<string | null | undefined> = [
+      ownedEntry?.normalizedName,
+      normalizedFromCache,
+      normalizedFromMetadata,
+      metadataName,
+      (channel as any)?.group_name_label,
+    ];
+
+    const resolvedName = nameCandidates.find(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
+
+    return {
+      ...channel,
+      groupMetadata: {
+        name: resolvedName ?? groupNameObjectId,
+        normalizedName:
+          (resolvedName && resolvedName.includes('.sui')
+            ? normalizeSuinsName(resolvedName)
+            : null) ?? ownedEntry?.normalizedName ?? normalizedFromMetadata ?? undefined,
+        nftId: groupNameObjectId,
+        expiresAt: ownedEntry?.expiresAt ?? (channel as any)?.group_name_expires_at,
+        address: groupNameObjectId,
+      },
+    };
+  }, [getGroupNameObjectId]);
 
   const fetchOwnedMemberCaps = useCallback(async (): Promise<Array<{ channelId: string; memberCapId: string }>> => {
     if (!currentAccount?.address) {
+      clearOwnedSuinsCache();
+      memberCapsCacheRef.current = null;
+      memberCapsPendingRef.current = null;
       return [];
     }
 
-    const memberCapType = `${MESSAGING_PACKAGE_ID}::member_cap::MemberCap`;
-    const ownedCaps: Array<{ channelId: string; memberCapId: string }> = [];
-
-    try {
-      let cursor: string | null = null;
-      do {
-        const response = await suiClient.getOwnedObjects({
-          owner: currentAccount.address,
-          filter: { StructType: memberCapType },
-          cursor,
-          limit: 50,
-          options: { showContent: true },
-        });
-
-        for (const item of response.data ?? []) {
-          const objectId = item.data?.objectId;
-          const fields = (item.data?.content as any)?.fields;
-          if (objectId && fields?.channel_id) {
-            ownedCaps.push({
-              channelId: fields.channel_id,
-              memberCapId: objectId,
-            });
-          }
-        }
-
-        cursor = response.hasNextPage ? response.nextCursor ?? null : null;
-      } while (cursor);
-    } catch (err) {
-      console.error('Failed to fetch owned member caps:', err);
+    const cached = memberCapsCacheRef.current;
+    const now = Date.now();
+    if (cached && now - cached.timestamp < MEMBER_CAP_CACHE_TTL_MS) {
+      return cached.data;
     }
 
-    return ownedCaps;
-  }, [currentAccount?.address, suiClient]);
+    if (memberCapsPendingRef.current) {
+      return memberCapsPendingRef.current;
+    }
+
+    const memberCapType = `${MESSAGING_PACKAGE_ID}::member_cap::MemberCap`;
+    const fetchPromise = (async () => {
+      for (let attempt = 0; attempt < MEMBER_CAP_MAX_RETRIES; attempt++) {
+        try {
+          const ownedCaps: Array<{ channelId: string; memberCapId: string }> = [];
+          const ownedSuinsMap = new Map<string, OwnedSuinsEntry>();
+          let cursor: string | null = null;
+          do {
+            const response = await suiClient.getOwnedObjects({
+              owner: currentAccount.address,
+              filter: { StructType: memberCapType },
+              cursor,
+              limit: 50,
+              options: { showContent: true },
+            });
+
+            for (const item of response.data ?? []) {
+              const objectId = item.data?.objectId;
+              const fields = (item.data?.content as any)?.fields;
+              if (objectId && fields?.channel_id) {
+                ownedCaps.push({
+                  channelId: fields.channel_id,
+                  memberCapId: objectId,
+                });
+              }
+            }
+
+            cursor = response.hasNextPage ? response.nextCursor ?? null : null;
+          } while (cursor);
+
+          const suinsStructTypes =
+            clientNetwork === 'mainnet'
+              ? [
+                  '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
+                ]
+              : clientNetwork === 'testnet'
+              ? [
+                  '0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::suins_registration::SuinsRegistration',
+                ]
+              : [];
+
+          for (const structType of suinsStructTypes) {
+            let suinsCursor: string | null = null;
+            do {
+              const response = await suiClient.getOwnedObjects({
+                owner: currentAccount.address,
+                filter: { StructType: structType },
+                cursor: suinsCursor,
+                limit: 50,
+                options: { showContent: true },
+              });
+
+              for (const item of response.data ?? []) {
+                const objectId = item.data?.objectId;
+                const fields = (item.data?.content as any)?.fields;
+                const domainName = fields?.domain_name as string | undefined;
+                if (objectId && domainName) {
+                  const normalized = normalizeSuinsName(domainName);
+                  if (!ownedSuinsMap.has(normalized)) {
+                    ownedSuinsMap.set(normalized, {
+                      owner: currentAccount.address.toLowerCase(),
+                      normalizedName: normalized,
+                      objectId,
+                      expiresAt: fields?.expiration_timestamp_ms
+                        ? Number(fields.expiration_timestamp_ms)
+                        : undefined,
+                    });
+                  }
+                }
+              }
+
+              suinsCursor = response.hasNextPage ? response.nextCursor ?? null : null;
+            } while (suinsCursor);
+          }
+
+          const result = ownedCaps;
+          memberCapsCacheRef.current = { data: result, timestamp: Date.now() };
+          setOwnedSuinsCache(
+            currentAccount.address,
+            Array.from(ownedSuinsMap.values()),
+          );
+          return result;
+        } catch (err) {
+          const status =
+            (err as any)?.response?.status ??
+            (err as any)?.status ??
+            (err as any)?.cause?.response?.status;
+          if (status === 429 && attempt < MEMBER_CAP_MAX_RETRIES - 1) {
+            const delay =
+              MEMBER_CAP_RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+            await sleep(delay);
+            continue;
+          }
+          console.error('Failed to fetch owned member caps:', err);
+          break;
+        }
+      }
+
+      if (cached) {
+        return cached.data;
+      }
+
+      return [];
+    })();
+
+    memberCapsPendingRef.current = fetchPromise;
+    try {
+      return await fetchPromise;
+    } finally {
+      memberCapsPendingRef.current = null;
+    }
+  }, [clientNetwork, currentAccount?.address, memberCapsCacheRef, memberCapsPendingRef, sleep, suiClient]);
 
   const createChannel = useCallback(async (recipientAddresses: string[]) => {
     if (!messagingClient || !currentAccount) {
@@ -165,7 +388,11 @@ export const useMessaging = () => {
           : true;
       });
 
-      setChannels(filtered);
+      const augmented = await Promise.all(
+        filtered.map((channel: any) => augmentChannelWithGroupMetadata(channel)),
+      );
+
+      setChannels(augmented as DecryptedChannelObject[]);
     } catch (err) {
       const errorMsg = err instanceof Error ? `[fetchChannels] ${err.message}` : '[fetchChannels] Failed to fetch channels';
       setChannelError(errorMsg);
@@ -173,7 +400,7 @@ export const useMessaging = () => {
     } finally {
       setIsFetchingChannels(false);
     }
-  }, [messagingClient, currentAccount, fetchOwnedMemberCaps]);
+  }, [messagingClient, currentAccount, fetchOwnedMemberCaps, augmentChannelWithGroupMetadata]);
 
   const getChannelById = useCallback(async (channelId: string) => {
     if (!messagingClient || !currentAccount) {
@@ -196,8 +423,10 @@ export const useMessaging = () => {
       });
 
       if (filtered.length > 0) {
-        setCurrentChannel(filtered[0]);
-        return filtered[0];
+        const channel = filtered[0];
+        const augmentedChannel = await augmentChannelWithGroupMetadata(channel);
+        setCurrentChannel(augmentedChannel as DecryptedChannelObject);
+        return augmentedChannel as DecryptedChannelObject;
       }
       return null;
     } catch (err) {
@@ -206,7 +435,7 @@ export const useMessaging = () => {
       console.error('Error fetching channel:', err);
       return null;
     }
-  }, [messagingClient, currentAccount]);
+  }, [messagingClient, currentAccount, augmentChannelWithGroupMetadata]);
 
   const fetchMessages = useCallback(async (channelId: string, cursor: bigint | null = null) => {
     if (!messagingClient || !currentAccount) {
