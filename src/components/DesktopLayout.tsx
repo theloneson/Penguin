@@ -3,6 +3,7 @@ import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import { ChatBubbleIcon } from '@radix-ui/react-icons';
 import { useMessaging } from '../hooks/useMessaging';
+import convoImage from '../assets/convo.png';
 
 export function DesktopLayout() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function DesktopLayout() {
 
   return (
     <div className="w-full h-full bg-gray-900 titillium-web-regular">
-      {/* Desktop Layout */}{/* Desktop Layout */}
+      {/* Desktop Layout */}
       <div className="hidden md:flex w-full h-full">
         {/* Left Panel - Chat List */}
         <div className="w-1/3 min-w-80 max-w-md">
@@ -39,20 +40,25 @@ export function DesktopLayout() {
               handleBackToChatList={handleBackToChatList}
             />
           ) : (
-            <div className="w-full h-full bg-white flex items-center justify-center px-6">
-              <div className="max-w-md w-full text-center px-10 py-12 bg-white rounded-[2rem] border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)]">
-                <div className="w-20 h-20 bg-vibrant-purple rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-black">
-                  <ChatBubbleIcon className="w-10 h-10 text-black" />
+            <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+              {!isReady ? (
+                // Initializing messaging screen - light purple version
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-[#7A75E5] rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ChatBubbleIcon className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-[#7A75E5] mb-2">Welcome to Penguin</h2>
+                  <p className="text-[#7A75E5]">
+                    Initializing messaging...
+                  </p>
                 </div>
-                <h2 className="text-2xl font-black text-black mb-3 titillium-web-bold">
-                  {isReady ? 'Pick a conversation' : 'Warming up the igloo'}
-                </h2>
-                <p className="text-black/70 font-bold">
-                  {!isReady
-                    ? 'Initializing secure messaging. Hang tight while we gather your channels.'
-                    : 'Select a chat from the list or start a new one to begin messaging.'}
-                </p>
-              </div>
+              ) : (
+                // Ready state - background image
+                <div 
+                  className="w-full h-full bg-cover bg-center bg-no-repeat"
+                  style={{ backgroundImage: `url(${convoImage})` }}
+                />
+              )}
             </div>
           )}
         </div>

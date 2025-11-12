@@ -252,7 +252,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
 
   return (
     // UPDATED: Main ChatList container now acts as a white card on top of the global gradient
-    <div className="w-full h-full relative flex flex-col bg-white rounded-xl shadow-lg">
+    <div className="w-full h-full relative flex flex-col bg-white shadow-lg">
       <div className="relative z-10 flex flex-col h-full">
         {/* Header */}
         <motion.div

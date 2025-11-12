@@ -14,7 +14,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
     // Show splash for 6 seconds then fade out
     const timer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(onFinish, 500);
+      setTimeout(onFinish, 1500); // Wait for 1.5s fade-out to finish
     }, 6000);
 
     return () => clearTimeout(timer);
@@ -37,7 +37,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 1.5 }} // 1.5 second fade-out
     >
       {videoError ? (
         // Fallback - only show if video fails
