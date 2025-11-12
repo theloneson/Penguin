@@ -270,7 +270,7 @@ export function ChatList({ onSelect, selectedChatId }: { onSelect?: (id: string)
                 <FaComments className="w-5 h-5" />
               </motion.div>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">Penguin Chat</h1>
+                <h1 className="text-lg font-semibold text-gray-900">Penguin</h1>
                 <p className="text-sm text-gray-600">Ice-cool messaging</p>
               </div>
             </div>

@@ -112,18 +112,18 @@ export function Init() {
     // Loading when initializing session
     if (currentAccount && isInitializing) {
       return (
-        <div className="w-full h-full bg-white flex flex-col items-center justify-center titillium-web-regular px-6">
+        <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center titillium-web-regular px-6">
           <motion.div
-            className="max-w-md w-full text-center px-10 py-12 bg-white rounded-[2rem] border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)]"
+            className="max-w-md w-full text-center px-10 py-12 bg-white rounded-3xl border border-gray-200 shadow-xl"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           >
-            <div className="w-20 h-20 rounded-full bg-vibrant-purple border-4 border-black flex items-center justify-center mx-auto mb-6">
-              <FaSpinner className="w-8 h-8 text-black animate-spin" />
+            <div className="w-20 h-20 rounded-full bg-purple-100 border border-purple-200 flex items-center justify-center mx-auto mb-6">
+              <FaSpinner className="w-8 h-8 text-purple-500 animate-spin" />
             </div>
-            <h2 className="text-2xl font-black text-black mb-3 titillium-web-bold">Initializing...</h2>
-            <p className="text-black/70 text-base font-bold mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-3 titillium-web-bold">Initializing...</h2>
+            <p className="text-gray-600 text-base font-medium mb-6">
               Sign to set up your secure messaging session. This only takes a moment.
             </p>
           </motion.div>
