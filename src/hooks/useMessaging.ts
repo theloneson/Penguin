@@ -76,15 +76,10 @@ export const useMessaging = () => {
 
   const getGroupNameObjectId = useCallback((channel: any): string | null => {
     const rawChannel = channel?.data ?? channel;
-    const metadata = (rawChannel?.metadata ?? rawChannel?.data?.metadata) as Record<string, unknown> | undefined;
     const candidates: Array<unknown> = [
       (rawChannel as any)?.group_name_nft,
       rawChannel?.group_name,
       rawChannel?.groupName,
-      rawChannel?.content?.fields?.group_name,
-      metadata?.group_name_nft,
-      metadata?.group_name,
-      metadata?.groupName,
       (rawChannel as any)?.content?.fields?.group_name,
     ];
     for (const candidate of candidates) {
